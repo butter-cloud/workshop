@@ -11,9 +11,4 @@ public class ApiController {
     public String hello() {
         return "Hello, World From Server!";
     }
-
-    @RequestMapping("/test")
-    public String test() {
-        return "New Pipeline Triggered!";
-    }
 }
