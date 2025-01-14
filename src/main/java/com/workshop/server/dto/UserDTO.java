@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserDTO {
-    private String name;
+    private String nickname;
     private String id;
     private String role;        // supporter, client
     private String status;      // idle, requesting, meeting

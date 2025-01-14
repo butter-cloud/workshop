@@ -1,6 +1,6 @@
 package com.workshop.server.service;
 
-import com.workshop.server.controller.UserController;
+import com.workshop.server.exception.UserAlreadyExistsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,7 +8,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
-import java.util.UUID;
 
 @Service
 public class UserService {
@@ -21,25 +20,30 @@ public class UserService {
     public boolean registerUser(String nickname, String role, String sessionId) {
         log.info("[UserService] Registering user with nickname: {}", nickname);
 
-        try {
-//            String id = UUID.randomUUID().toString();
-//            log.info("[UserService] Created User ID: {}", id);
+        String status = "supporter".equals(role) ? "idle" : "requesting";
+        String redisKey = "user:" + nickname;
 
-            String status = "supporter".equals(role) ? "idle" : "requesting";
+        log.info("[UserService] Registering user with redisKey: {}", redisKey);
 
-            Map<String, String> userInfo = Map.of(
-                    "name", nickname,
-                    "id", sessionId,
-                    "role", role,
-                    "status", status
-            );
+        Map<String, String> userInfo = Map.of(
+                "nickname", nickname,
+                "id", sessionId,
+                "role", role,
+                "status", status
+        );
 
-            redisTemplate.opsForHash().putAll("user:" + nickname, userInfo);    // ex) user:jay, {}
-
+        if (redisTemplate.opsForHash().hasKey("user:" + nickname, "nickname")) {
+            log.info("[UserService] User with nickname {} already exists", nickname);
+            throw new UserAlreadyExistsException("User with nickname " + nickname + " already exists.");
+        } else {
+            redisTemplate.opsForHash().putAll(redisKey, userInfo);
             return true;
-        } catch (Exception e) {
-            return false;
         }
+    }
+
+    // 모든 사용자 조회
+    public Map<Object, Object> getAllUsers() {
+        return redisTemplate.opsForHash().entries("user:");
     }
 
     // 사용자 조회
@@ -48,7 +52,7 @@ public class UserService {
     }
 
     // 사용자 상태 업데이트
-    public void updateUserStatus(String nickname, String status) {
-        redisTemplate.opsForHash().put("user:" + nickname, "status", status);
+    public void updateUserStatus(String sessionId, String status) {
+        redisTemplate.opsForHash().put("user:" + sessionId, "status", status);
     }
 }
