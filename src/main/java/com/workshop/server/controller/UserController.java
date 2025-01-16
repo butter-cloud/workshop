@@ -3,11 +3,11 @@ package com.workshop.server.controller;
 import com.workshop.server.common.WebResponse;
 import com.workshop.server.dto.UserDTO;
 import com.workshop.server.exception.UserAlreadyExistsException;
+import com.workshop.server.service.MatchService;
 import com.workshop.server.service.UserService;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,30 +20,30 @@ public class UserController {
 
     private static final Logger log = LoggerFactory.getLogger(UserController.class);
 
-    private final UserService userService;
+    @Autowired
+    private UserService userService;
 
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
+    @Autowired
+    private MatchService matchService;
 
     @RequestMapping("/login")
     public ResponseEntity<WebResponse<?>> login(
-            @RequestBody UserDTO userDTO,
-            HttpServletRequest request
+            @RequestBody UserDTO userDTO
     ){
         log.info("[UserController] userDTO : {}", userDTO.toString());
-        HttpSession session = request.getSession();
-        String sessionId = session.getId();
-
-        log.info("[UserController] Getting user sessionId : {}", sessionId);
-        log.info("[UserController] Logging in user with nickname: {}", userDTO.getNickname());
 
         try {
-            userService.registerUser(userDTO.getNickname(), userDTO.getRole(), sessionId);
-            log.info("[UserController] User with nickname {} registered", userDTO.getNickname());
-            return ResponseEntity.ok().body(WebResponse.success("User registered successfully"));
+            // redis에 유저 등록
+            String registeredUserId = userService.registerUser(userDTO.getUserName(), userDTO.getRole());
+            if (registeredUserId != null) {
+
+                log.info("[UserController] User with userId {} registered", registeredUserId);
+                return ResponseEntity.ok().body(WebResponse.success(registeredUserId, "User registered successfully"));
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(WebResponse.failure("Error registering user"));
+            }
         } catch (UserAlreadyExistsException e) {
-            log.info("[UserController] User with nickname {} already exists", userDTO.getNickname());
+            log.info("[UserController] User with name {} already exists", userDTO.getUserName());
             return ResponseEntity.ok().body(WebResponse.failure(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(WebResponse.failure("Error registering user"));
@@ -51,20 +51,32 @@ public class UserController {
     }
 
     @RequestMapping("/user")
-    public String user (@RequestParam String nickname) {
+    public String user (@RequestParam String userId) {
 
-        log.info("[UserController] Getting user with nickname : {}", nickname);
+        log.info("[UserController] Getting user with userId : {}", userId);
 
         try {
-            return userService.getUser(nickname).toString();
+            log.info("[UserController] Getting user with userId : {}", userId);
+            String user = userService.getUser(userId).toString();
+            log.info("User: {}", user);
+            return user;
         } catch (Exception e) {
             return "User not found";
         }
     }
 
-    @RequestMapping("/user/all")
-    public String allUsers () {
-        return userService.getAllUsers().toString();
+    @RequestMapping("/supporter/accept")
+    public String acceptRequest (@RequestParam String supporterId, @RequestParam String clientId) {
+        log.info("[UserController] Supporter with userId {} accepted request of {}!", supporterId, clientId);
+        try {
+            String matchedRoomId = matchService.matchSupporter(supporterId, clientId);
+            if (matchedRoomId == null) {
+                return "Request not accepted";
+            }
+            return matchedRoomId;
+        } catch (Exception e) {
+            return "Request not accepted";
+        }
     }
 
 }
